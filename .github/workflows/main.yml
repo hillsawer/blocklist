@@ -1,0 +1,41 @@
+# kinda vibed btw
+on:
+  push:
+    paths:
+      - 'images/**'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - name: Build phash tool
+        run: |
+          rm -rf phash
+          git clone https://git.tuffaceous.dev/phash
+          cd phash
+          go build -o phash
+      - name: Generate hashes
+        run: |
+          find images/ -type f | while IFS= read -r f; do
+            dir="hashes.tmp/$(dirname "${f#images/}")"
+            mkdir -p "$dir"
+            phash/phash < "$f" >> "$dir/phash" || echo "skip: $f"
+          done
+          find hashes.tmp/ -name "phash" | while IFS= read -r f; do
+            sort -u -o "$f" "$f"
+          done
+          rm -rf hashes/
+          mv hashes.tmp/ hashes/
+      - name: Commit hashes
+        run: |
+          git config user.email "actions@github.com"
+          git config user.name "GitHub Actions"
+          git add hashes/
+          git diff --cached --quiet || git commit -m "Update hashes"
+          git push
